@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model accident_reports {
+  report_id     Int           @id @default(autoincrement())
+  team_id       Int
+  user_id       Int
+  status        String        @default("pending") @db.VarChar(15)
+  accident_poof String        @db.Text
+  accident_team accident_team @relation(fields: [team_id], references: [team_id], onDelete: NoAction, onUpdate: NoAction, map: "team_id")
+  user          user          @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "user_rid_fk")
+
+  @@index([team_id], map: "team_id_idx")
+  @@index([user_id], map: "user_rid_fk_idx")
+}
+
+model accident_team {
+  team_id          Int                @id
+  area_name        String             @db.Text
+  accident_reports accident_reports[]
+  user             user               @relation(fields: [team_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "team_id_fk")
+}
+
+model ambulance {
+  ambulance_id     Int     @id @default(autoincrement())
+  ambulance_type   String  @db.Text
+  ambulance_number String  @db.Text
+  driver           driver?
+}
+
+model ambulance_booking {
+  booking_id     Int        @id @default(autoincrement())
+  user_id        Int
+  driver_id      Int
+  hospital_id    Int?
+  curr_location  String     @db.Text
+  ambulance_type String     @db.Text
+  status         String     @default("pending") @db.VarChar(15)
+  driver         driver     @relation(fields: [driver_id], references: [driver_id], onDelete: NoAction, onUpdate: NoAction, map: "driver_id_fk")
+  hospitals      hospitals? @relation(fields: [hospital_id], references: [hospital_id], onDelete: NoAction, onUpdate: NoAction, map: "hospital_id_fk")
+  user           user       @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "user_id_fk")
+
+  @@index([driver_id], map: "driver_id_idx")
+  @@index([hospital_id], map: "hospital_id_idx")
+  @@index([user_id], map: "user_id_idx")
+}
+
+model clinic {
+  clinic_id            Int                    @id @default(autoincrement())
+  clinic_name          String                 @db.Text
+  clinic_phone         String                 @db.Text
+  clinic_address       String                 @db.Text
+  clinic_doctor        clinic_doctor[]
+  clinic_receptionists clinic_receptionists[]
+}
+
+model clinic_doctor {
+  cd_id               Int                   @id @default(autoincrement())
+  doctor_id           Int
+  clinic_id           Int
+  doctor              doctor                @relation(fields: [doctor_id], references: [doctor_id], onDelete: NoAction, onUpdate: NoAction, map: "clinic_doctor_fk")
+  clinic              clinic                @relation(fields: [clinic_id], references: [clinic_id], onDelete: NoAction, onUpdate: NoAction, map: "clinic_id_fk")
+  doctor_appointments doctor_appointments[]
+
+  @@index([clinic_id], map: "clinic_id_idx")
+  @@index([doctor_id], map: "user_id_idx")
+}
+
+model clinic_receptionists {
+  cr_id     Int    @id
+  clinic_id Int
+  clinic    clinic @relation(fields: [clinic_id], references: [clinic_id], onDelete: NoAction, onUpdate: NoAction, map: "clinic_fk")
+  user      user   @relation(fields: [cr_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "clinic_receptionist_fk")
+
+  @@index([clinic_id], map: "clinic_id_idx")
+}
+
+model doctor {
+  doctor_id     Int             @id
+  speciality    String          @db.Text
+  clinic_doctor clinic_doctor[]
+  user          user            @relation(fields: [doctor_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "doctor_id_fk")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model doctor_appointments {
+  doctor_app_id Int           @id @default(autoincrement())
+  cd_id         Int
+  user_id       Int
+  status        String        @default("pending") @db.VarChar(15)
+  danumber      Int?
+  reason        String?       @db.Text
+  clinic_doctor clinic_doctor @relation(fields: [cd_id], references: [cd_id], onDelete: NoAction, onUpdate: NoAction, map: "cd_id_fk")
+  user          user          @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "user_clinic_fk")
+
+  @@index([cd_id], map: "cd_id_fk_idx")
+  @@index([user_id], map: "user_clinic_fk_idx")
+}
+
+model driver {
+  driver_id         Int                 @id
+  ambulance_id      Int                 @unique(map: "ambulance_id_UNIQUE")
+  expirence         Int?
+  ambulance_booking ambulance_booking[]
+  ambulance         ambulance           @relation(fields: [ambulance_id], references: [ambulance_id], onDelete: NoAction, onUpdate: NoAction, map: "ambulance_fk")
+  user              user                @relation(fields: [driver_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "driver_tid_fk")
+
+  @@index([ambulance_id], map: "ambulance_id_idx")
+}
+
+model hospital_receptionists {
+  hr_id       Int       @id
+  hospital_id Int
+  hospitals   hospitals @relation(fields: [hospital_id], references: [hospital_id], onDelete: NoAction, onUpdate: NoAction, map: "hospital_fk")
+  user        user      @relation(fields: [hr_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "hospital_receptionist_fk")
+
+  @@index([hospital_id], map: "hospital_id_idx")
+}
+
+model hospitals {
+  hospital_id            Int                      @id @default(autoincrement())
+  hospital_name          String                   @db.Text
+  hospital_address       String                   @db.Text
+  hospital_lat           Float                    @db.Float
+  hospital_log           Float                    @db.Float
+  rating                 Float?                   @db.Float
+  total_ratings          Int?
+  ambulance_booking      ambulance_booking[]
+  hospital_receptionists hospital_receptionists[]
+  insurance_hospitals    insurance_hospitals[]
+}
+
+model insurance {
+  insurance_id        Int                   @id @default(autoincrement())
+  company_name        String                @db.Text
+  insurance_hospitals insurance_hospitals[]
+}
+
+model insurance_hospitals {
+  id           Int       @id @default(autoincrement())
+  insurance_id Int
+  hospital_id  Int
+  hospitals    hospitals @relation(fields: [hospital_id], references: [hospital_id], onDelete: NoAction, onUpdate: NoAction, map: "hospital_insurance_fk")
+  insurance    insurance @relation(fields: [insurance_id], references: [insurance_id], onDelete: NoAction, onUpdate: NoAction, map: "insurance_id_fk")
+
+  @@index([hospital_id], map: "hospital_id_idx")
+  @@index([insurance_id], map: "insurance_id_idx")
+}
+
+model lab {
+  lab_id            Int                 @id @default(autoincrement())
+  lab_name          String              @db.Text
+  lab_phone         String              @db.Text
+  lab_address       String              @db.Text
+  lab_tests         String              @db.Text
+  lab_appointments  lab_appointments[]
+  lab_receptionists lab_receptionists[]
+}
+
+model lab_appointments {
+  lab_app_id       Int      @id @default(autoincrement())
+  lab_id           Int
+  user_id          Int
+  appointment_time DateTime @db.DateTime(0)
+  tests            String   @db.Text
+  status           String   @default("pending") @db.VarChar(15)
+  lab              lab      @relation(fields: [lab_id], references: [lab_id], onDelete: NoAction, onUpdate: NoAction, map: "lab_app_fk")
+  user             user     @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "lab_fk")
+
+  @@index([lab_id], map: "lab_id_idx")
+  @@index([user_id], map: "user_id_idx")
+}
+
+model lab_receptionists {
+  lr_id  Int  @id
+  lab_id Int
+  lab    lab  @relation(fields: [lab_id], references: [lab_id], onDelete: NoAction, onUpdate: NoAction, map: "lab_id_fk")
+  user   user @relation(fields: [lr_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "lab_receptionist_fk")
+
+  @@index([lab_id], map: "lab_id_idx")
+}
+
+model user {
+  user_id                Int                     @id @default(autoincrement())
+  user_name              String?                 @db.Text
+  phone_number           String                  @unique(map: "phone_number_UNIQUE") @db.VarChar(15)
+  gender                 String?                 @db.TinyText
+  age                    Int?
+  user_type              String                  @default("user") @db.VarChar(40)
+  user_pic               String?                 @db.VarChar(45)
+  accident_reports       accident_reports[]
+  accident_team          accident_team?
+  ambulance_booking      ambulance_booking[]
+  clinic_receptionists   clinic_receptionists?
+  doctor                 doctor?
+  doctor_appointments    doctor_appointments[]
+  driver                 driver?
+  hospital_receptionists hospital_receptionists?
+  lab_appointments       lab_appointments[]
+  lab_receptionists      lab_receptionists?
+}
