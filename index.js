@@ -7,12 +7,191 @@ const app = express();
 const PORT = 3000;
 app.use(express.json());
 
+// Function to fetch doctor info (Step 2-5, as shown in the previous answer)
+async function getDoctorInfo(doctorId) {
+    try {
+        // Step 1: Fetch Doctor Information
+        const doctorInfo = await prisma.doctor.findUnique({
+            where: { doctor_id: doctorId },
+            select: { speciality: true },
+        });
+
+        if (!doctorInfo) {
+            throw new Error('Doctor not found');
+        }
+
+        // Step 2: Fetch User Information
+        const doctorNameInfo = await prisma.user.findUnique({
+            where: { user_id: doctorId },
+            select: { user_name: true },
+        });
+
+        if (!doctorNameInfo) {
+            throw new Error('Doctor name not found');
+        }
+
+        const doctorName = doctorNameInfo.user_name;
+
+        // Step 3: Fetch Clinic IDs
+        const clinicDoctorInfo = await prisma.clinic_doctor.findMany({
+            where: { doctor_id: doctorId },
+            select: { clinic_id: true },
+        });
+
+        // Step 4: Fetch Clinic Names and Addresses
+        const clinicNamesAndAddresses = [];
+        for (const clinicDoc of clinicDoctorInfo) {
+            const clinicInfo = await prisma.clinic.findUnique({
+                where: { clinic_id: clinicDoc.clinic_id },
+                select: { clinic_name: true, clinic_address: true },
+            });
+
+            if (clinicInfo) {
+                clinicNamesAndAddresses.push({
+                    clinic_name: clinicInfo.clinic_name,
+                    clinic_address: clinicInfo.clinic_address,
+                });
+            }
+        }
+
+        // Step 5: Format the Data
+        const doctorData = {
+            doctor_name: doctorName,
+            speciality: doctorInfo.speciality,
+            clinic_names_and_addresses: clinicNamesAndAddresses,
+        };
+
+        return doctorData;
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+
+app.get('/appointments/:id', async (req, res) => {
+    const userId = parseInt(req.params.id);
+
+    // Initialize an array to store the transformed data
+    const transformedData = [];
+
+    // Define a function to transform the data
+    function transformData(appointment, doctor, clinic) {
+        return {
+            status: appointment.status,
+            danumber: appointment.danumber,
+            reason: appointment.reason,
+            doctor_name: doctor.user_name, // Assuming the doctor's name is stored in the 'name' field
+            phone_number: doctor.phone_number, // Assuming the doctor's phone_number is stored in the 'phone_number' field
+            gender: doctor.gender, // Assuming the doctor's gender is stored in the 'gender' field
+            age: doctor.age, // Assuming the doctor's age is stored in the 'age' field
+            user_pic: doctor.user_pic, // Assuming the doctor's user_pic is stored in the 'user_pic' field
+            clinic_name: clinic.clinic_name, // Assuming the clinic's name is stored in the 'name' field
+            clinic_phone: clinic.clinic_phone, // Assuming the clinic's phone is stored in the 'phone' field
+            clinic_address: clinic.clinic_address, // Assuming the clinic's address is stored in the 'address' field
+        };
+    }
+
+    // Fetch doctor appointments for the user
+    const doctorAppointments = await prisma.doctor_appointments.findMany({
+        where: {
+            user_id: userId,
+        },
+        include: {
+            clinic_doctor: true,
+        },
+    });
+
+    // Initialize an array to store the merged data
+    const mergedData = [];
+
+    // Iterate through doctor appointments
+    for (const appointment of doctorAppointments) {
+        const { cd_id } = appointment.clinic_doctor;
+
+        // Fetch doctor_id and clinic_id using cd_id
+        const clinicDoctor = await prisma.clinic_doctor.findUnique({
+            where: {
+                cd_id: cd_id,
+            },
+            select: {
+                doctor_id: true,
+                clinic_id: true,
+            },
+        });
+
+        // Fetch doctor information using doctor_id
+        const doctor = await prisma.user.findUnique({
+            where: {
+                user_id: clinicDoctor.doctor_id,
+            },
+        });
+
+        // Fetch clinic information using clinic_id
+        const clinic = await prisma.clinic.findUnique({
+            where: {
+                clinic_id: clinicDoctor.clinic_id,
+            },
+        });
+
+
+        // Transform the data and add it to the array
+        transformedData.push(transformData(appointment, doctor, clinic));
+    }
+
+    // 'mergedData' now contains a list of objects with merged data 
+
+    const labAppointments = await prisma.lab_appointments.findMany({
+        where: {
+            user_id: userId,
+        },
+    });
+    res.send({
+        DoctorAppointment: transformedData,
+        labAppointment: labAppointments,
+    });
+});
 app.get('/service/:service', async (req, res) => {
     const id = req.params.service
     if (id == 'hospitals') {
         const hospitals = await prisma.hospitals.findMany();
         res.send(hospitals);
     }
+    else if (id == 'doctors') {
+        try {
+            // Step 1: Fetch all doctors
+            const allDoctors = await prisma.doctor.findMany({
+                select: { doctor_id: true },
+            });
+
+            // Step 2-5: Fetch and format data for each doctor
+            const doctorsInfo = [];
+
+            for (const doctor of allDoctors) {
+                const doctorId = doctor.doctor_id;
+                const doctorData = await getDoctorInfo(doctorId);
+                doctorsInfo.push(doctorData);
+            }
+
+            res.json(doctorsInfo);
+        } catch (error) {
+            console.error('Error:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
+    else if (id == 'labs') {
+        const labs = await prisma.lab.findMany();
+        res.send(labs);
+    }
+    else if (id == 'medicines') {
+        const medicines = await prisma.hospitals.findMany();
+        res.send(medicines);
+    }
+});
+app.get('/bookingCheck/:id', async (req, res) => {
+    const id = parseInt(req.params.id)
+    const allUsers = await prisma.ambulance_booking.findMany({ where: { user_id: id } })
+    res.send(allUsers);
 });
 app.get('/user/:id', async (req, res) => {
     const id = parseInt(req.params.id)
@@ -118,9 +297,18 @@ app.get('/user/:id', async (req, res) => {
 });
 
 
-// app.post('/user'async (req,res)=>{
-
-// });
+app.post('/bookAmbu', async (req, res) => {
+    const { userId, hospitalId, lat, lng } = req.body
+    const result = await prisma.ambulance_booking.create({
+        data: {
+            user_id: userId,
+            hospital_id: parseInt(hospitalId),
+            lat: lat,
+            lng: lng,
+        },
+    })
+    res.json(result)
+});
 
 app.listen(
     PORT,

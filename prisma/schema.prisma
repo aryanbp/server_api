@@ -37,12 +37,13 @@ model ambulance {
 model ambulance_booking {
   booking_id     Int        @id @default(autoincrement())
   user_id        Int
-  driver_id      Int
+  driver_id      Int?
   hospital_id    Int?
-  curr_location  String     @db.Text
-  ambulance_type String     @db.Text
+  ambulance_type String     @default("basic") @db.VarChar(45)
   status         String     @default("pending") @db.VarChar(15)
-  driver         driver     @relation(fields: [driver_id], references: [driver_id], onDelete: NoAction, onUpdate: NoAction, map: "driver_id_fk")
+  lat            String     @db.VarChar(45)
+  lng            String     @db.VarChar(45)
+  driver         driver?    @relation(fields: [driver_id], references: [driver_id], onDelete: NoAction, onUpdate: NoAction, map: "driver_id_fk")
   hospitals      hospitals? @relation(fields: [hospital_id], references: [hospital_id], onDelete: NoAction, onUpdate: NoAction, map: "hospital_id_fk")
   user           user       @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "user_id_fk")
 
